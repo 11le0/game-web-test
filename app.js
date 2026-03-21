@@ -88,21 +88,9 @@ function renderUGS(list, grid) {
 function launchUGS(file, name) {
   const normalized = file.includes('.') ? file : file + '.html';
   const encoded = encodeURIComponent(normalized);
-  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile/UGS-Files/${encoded}?t=${Date.now()}`;
-
-  fetch(url)
-    .then(r => { if (!r.ok) throw new Error(); return r.text(); })
-    .then(html => {
-      // Write into the inline player iframe
-      const frame = document.getElementById('playerFrame');
-      openPlayer(name, null);
-      // slight delay so overlay is open before we write
-      setTimeout(() => {
-        const doc = frame.contentDocument || frame.contentWindow.document;
-        doc.open(); doc.write(html); doc.close();
-      }, 50);
-    })
-    .catch(() => alert(`Could not load "${name}". The file may not be on the CDN.`));
+  // Open directly — fetch() is blocked by CORS, direct navigation works fine
+  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/UGS-Files/${encoded}`;
+  window.open(url, '_blank');
 }
 
 // ── INLINE PLAYER OVERLAY ──
