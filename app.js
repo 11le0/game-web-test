@@ -5,7 +5,6 @@ const users = JSON.parse(localStorage.getItem('void_users') || '{}');
 
 document.addEventListener('DOMContentLoaded', () => {
   buildMovieCards();
-  buildTVCards();
   buildUGSGames();
   buildProxyHints();
   renderMessages();
@@ -14,23 +13,25 @@ document.addEventListener('DOMContentLoaded', () => {
   bindProxy();
   bindChat();
   bindBlank();
+  bindSearch();
   restoreSession();
 });
 
-// ── MOVIE CARDS (with real posters + vidsrc embed) ──
-function buildMovieCards() { renderMediaGrid('moviesGrid', movies, 'movie'); }
-function buildTVCards()    { renderMediaGrid('tvGrid',    tvShows, 'tv');    }
+// ── MOVIES / TV CARDS ──
+function buildMovieCards() {
+  renderCardGrid('moviesGrid', movies, 'media');
+  renderCardGrid('tvGrid', tvShows, 'media');
+}
 
-function renderMediaGrid(id, data, type) {
-  const el = document.getElementById(id);
+function renderCardGrid(containerId, data, type) {
+  const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = data.map(item => {
-    const tags = (item.genre || []).map(g => `<span class="tag">${g}</span>`).join('');
     const safeName = item.title.replace(/'/g, "\\'");
+    const tags = item.genre ? item.genre.map(g => `<span class="tag">${g}</span>`).join('') : '';
     return `
-      <div class="card" onclick="openMedia(${item.tmdb},'${safeName}','${type}')">
-        <div class="card-thumb">
-          <img src="${item.poster}" alt="${item.title}" onerror="this.style.display='none'">
+      <div class="card" onclick="openMedia('${safeName}')">
+        <div class="card-thumb">${item.emoji}
           <div class="card-thumb-overlay"><span class="play-btn">▶ WATCH</span></div>
         </div>
         <div class="card-body">
@@ -42,38 +43,68 @@ function renderMediaGrid(id, data, type) {
   }).join('');
 }
 
-// Open movie/show in an inline player overlay
-function openMedia(tmdbId, title, type) {
-  const src = type === 'tv'
-    ? `https://vidsrc.cc/v2/embed/tv/${tmdbId}`
-    : `https://vidsrc.cc/v2/embed/movie/${tmdbId}`;
-  openPlayer(title, src);
+function openMedia(title) {
+  alert(`🎬 "${title}"\n\nConnect a streaming source (e.g. Vidsrc) to enable playback.`);
 }
 
-// ── GAME LAUNCHER (inline overlay, no new tab) ──
+// ── UGS GAMES ──
 function buildUGSGames() {
   const grid = document.getElementById('gamesGrid');
   if (!grid) return;
+
+  // A–Z filter bar
+  const letters = [...new Set(
+    ugsFiles.map(f => ugsDisplayName(f)[0].toUpperCase()).filter(c => /[A-Z0-9]/.test(c))
+  )].sort();
+
+  const filterBar = document.createElement('div');
+  filterBar.className = 'games-filter-bar';
+  filterBar.innerHTML =
+    `<span class="filter-btn active" data-letter="ALL">ALL</span>` +
+    letters.map(l => `<span class="filter-btn" data-letter="${l}">${l}</span>`).join('');
 
   // Search box
   const gameSearch = document.createElement('input');
   gameSearch.className = 'games-search';
   gameSearch.placeholder = 'Search games...';
-  grid.before(gameSearch);
 
+  // Insert both before the grid
+  grid.before(filterBar);
+  filterBar.after(gameSearch);
+
+  // Initial render
   renderUGS(ugsFiles, grid);
 
-  gameSearch.addEventListener('input', () => {
-    const q = gameSearch.value.toLowerCase();
-    const filtered = q
-      ? ugsFiles.filter(f => ugsDisplayName(f).toLowerCase().includes(q))
-      : ugsFiles;
-    renderUGS(filtered, grid);
+  // Letter filter
+  filterBar.addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilters();
   });
+
+  // Search filter
+  gameSearch.addEventListener('input', applyFilters);
+
+  function applyFilters() {
+    const q = gameSearch.value.toLowerCase();
+    const letter = filterBar.querySelector('.filter-btn.active')?.dataset.letter || 'ALL';
+    const filtered = ugsFiles.filter(f => {
+      const name = ugsDisplayName(f);
+      const matchLetter = letter === 'ALL' || name[0].toUpperCase() === letter;
+      const matchSearch = !q || name.toLowerCase().includes(q);
+      return matchLetter && matchSearch;
+    });
+    renderUGS(filtered, grid);
+  }
 }
 
 function renderUGS(list, grid) {
-  if (!list.length) { grid.innerHTML = `<div class="games-empty">No games found</div>`; return; }
+  if (!list.length) {
+    grid.innerHTML = `<div class="games-empty">No games found</div>`;
+    return;
+  }
   grid.innerHTML = list.map(file => {
     const name = ugsDisplayName(file);
     const safe = name.replace(/'/g, "\\'");
@@ -88,78 +119,57 @@ function renderUGS(list, grid) {
 function launchUGS(file, name) {
   const normalized = file.includes('.') ? file : file + '.html';
   const encoded = encodeURIComponent(normalized);
-  // Open directly — fetch() is blocked by CORS, direct navigation works fine
   const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/UGS-Files/${encoded}`;
   window.open(url, '_blank');
 }
 
-// ── INLINE PLAYER OVERLAY ──
-// This overlay is injected once into the page
-function ensurePlayer() {
-  if (document.getElementById('playerOverlay')) return;
-  const overlay = document.createElement('div');
-  overlay.id = 'playerOverlay';
-  overlay.innerHTML = `
-    <div class="player-box">
-      <div class="player-topbar">
-        <span class="player-title" id="playerTitle">—</span>
-        <button class="player-close" onclick="closePlayer()">✕</button>
-      </div>
-      <iframe id="playerFrame" allowfullscreen allow="autoplay; fullscreen"></iframe>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closePlayer(); });
-}
-
-function openPlayer(title, src) {
-  ensurePlayer();
-  document.getElementById('playerTitle').textContent = title;
-  const frame = document.getElementById('playerFrame');
-  if (src) frame.src = src;
-  document.getElementById('playerOverlay').classList.add('open');
-}
-
-function closePlayer() {
-  const overlay = document.getElementById('playerOverlay');
-  if (!overlay) return;
-  overlay.classList.remove('open');
-  const frame = document.getElementById('playerFrame');
-  frame.src = '';
-}
-
 // ── NAVIGATION ──
 const pageTitles = { home:'Home', movies:'Movies & TV', games:'Games', proxy:'Proxy', chat:'Chat' };
+
 function navigate(panelId) {
-  document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.panel === panelId));
-  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + panelId));
+  document.querySelectorAll('.nav-item').forEach(i =>
+    i.classList.toggle('active', i.dataset.panel === panelId));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'panel-' + panelId));
   document.getElementById('pageTitle').textContent = pageTitles[panelId] || panelId;
+  document.getElementById('searchInput').value = '';
 }
+
 function bindNav() {
-  document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigate(item.dataset.panel)));
-  document.querySelectorAll('.quick-card[data-goto]').forEach(card => card.addEventListener('click', () => navigate(card.dataset.goto)));
+  document.querySelectorAll('.nav-item').forEach(item =>
+    item.addEventListener('click', () => navigate(item.dataset.panel)));
+  document.querySelectorAll('.quick-card[data-goto]').forEach(card =>
+    card.addEventListener('click', () => navigate(card.dataset.goto)));
 }
 
 // ── PROXY ──
 function buildProxyHints() {
   const wrap = document.getElementById('proxyHints');
   if (!wrap) return;
-  wrap.innerHTML = proxyHints.map(h => `<span class="proxy-hint" data-hint="${h}">${h}</span>`).join('');
-  wrap.querySelectorAll('.proxy-hint').forEach(btn => btn.addEventListener('click', () => {
-    document.getElementById('proxyInput').value = btn.dataset.hint;
-  }));
+  wrap.innerHTML = proxyHints.map(h =>
+    `<span class="proxy-hint" data-hint="${h}">${h}</span>`).join('');
+  wrap.querySelectorAll('.proxy-hint').forEach(btn =>
+    btn.addEventListener('click', () => {
+      document.getElementById('proxyInput').value = btn.dataset.hint;
+    }));
 }
+
 function bindProxy() {
-  const input = document.getElementById('proxyInput');
-  const goBtn = document.getElementById('proxyGoBtn');
-  const frame = document.getElementById('proxyFrame');
+  const input    = document.getElementById('proxyInput');
+  const goBtn    = document.getElementById('proxyGoBtn');
+  const frame    = document.getElementById('proxyFrame');
   const frameUrl = document.getElementById('proxyFrameUrl');
+
   function go() {
     let val = input.value.trim();
     if (!val) return;
     if (!val.startsWith('http')) val = 'https://' + val;
     frameUrl.textContent = val;
+    // Replace with your proxy URL when ready:
+    // frame.src = 'https://your-scramjet.onrender.com/?' + encodeURIComponent(val);
     frame.src = val;
   }
+
   goBtn.addEventListener('click', go);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 }
@@ -175,14 +185,19 @@ function bindChat() {
 // ── AUTH ──
 function bindAuth() {
   document.getElementById('userPill').addEventListener('click', () => {
-    if (window.currentUser) { if (confirm('Log out?')) logout(); } else openAuth();
+    if (window.currentUser) { if (confirm('Log out?')) logout(); }
+    else openAuth();
   });
   document.getElementById('modalCloseBtn').addEventListener('click', closeAuth);
-  document.getElementById('authModal').addEventListener('click', e => { if (e.target === document.getElementById('authModal')) closeAuth(); });
-  document.querySelectorAll('.modal-tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+  document.getElementById('authModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('authModal')) closeAuth();
+  });
+  document.querySelectorAll('.modal-tab').forEach(tab =>
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
   document.getElementById('loginSubmit').addEventListener('click', doLogin);
   document.getElementById('registerSubmit').addEventListener('click', doRegister);
 }
+
 function openAuth() {
   document.getElementById('authSuccess').style.display = 'none';
   document.getElementById('loginForm').style.display = 'block';
@@ -210,7 +225,7 @@ function doRegister() {
   const p = document.getElementById('regPass').value;
   if (!u || !e || !p) return alert('Fill in all fields.');
   if (p.length < 6) return alert('Password must be at least 6 characters.');
-  if (users[u]) return alert('Username already taken.');
+  if (users[u])     return alert('Username already taken.');
   users[u] = { email: e, pass: btoa(p) };
   localStorage.setItem('void_users', JSON.stringify(users));
   login(u); showSuccess(`Welcome, ${u}!`, '// account created');
@@ -246,6 +261,19 @@ function restoreSession() {
 function bindBlank() {
   document.getElementById('blankBtn').addEventListener('click', () => {
     const w = window.open('about:blank', '_blank');
-    w.document.open(); w.document.write(document.documentElement.outerHTML); w.document.close();
+    w.document.open();
+    w.document.write(document.documentElement.outerHTML);
+    w.document.close();
+  });
+}
+
+// ── TOPBAR SEARCH (movies/tv only) ──
+function bindSearch() {
+  document.getElementById('searchInput').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#panel-movies .card').forEach(card => {
+      const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
+      card.style.display = !q || title.includes(q) ? '' : 'none';
+    });
   });
 }
