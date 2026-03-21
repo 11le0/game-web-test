@@ -716,3 +716,124 @@ html, body {
   padding: 24px 0;
   text-align: center;
 }
+
+/* ── GAME / MEDIA OVERLAY ── */
+.game-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.game-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.game-overlay-bar {
+  height: 46px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+.game-overlay-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+.game-overlay-close {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted2);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.game-overlay-close:hover {
+  color: var(--text);
+  border-color: var(--muted2);
+}
+.game-overlay-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #000;
+}
+
+/* remove old card-grid layout for games */
+#panel-games .card-grid { display: none; }
+
+/* ── CARD POSTER IMAGES ── */
+.card-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  position: absolute; inset: 0;
+  display: block;
+}
+.card-thumb { position: relative; }
+
+/* ── INLINE PLAYER OVERLAY ── */
+#playerOverlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+  backdrop-filter: blur(6px);
+}
+#playerOverlay.open { opacity: 1; pointer-events: all; }
+
+.player-box {
+  width: min(92vw, 1100px);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  transform: translateY(10px);
+  transition: transform 0.2s;
+}
+#playerOverlay.open .player-box { transform: translateY(0); }
+
+.player-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.player-title {
+  font-size: 13px; font-weight: 700;
+  color: var(--text); letter-spacing: 0.04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.player-close {
+  background: none; border: none;
+  color: var(--muted); cursor: pointer;
+  font-size: 16px; line-height: 1;
+  transition: color 0.15s; flex-shrink: 0; margin-left: 12px;
+}
+.player-close:hover { color: var(--highlight); }
+
+#playerFrame {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: none;
+  background: #000;
+  display: block;
+}
+
+/* games: remove filter bar styles if leftover */
+.games-filter-bar { display: none; }
