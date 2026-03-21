@@ -1,12 +1,12 @@
-// ── APP.JS — main controller ──
+// ── APP.JS ──
 
-// ── STATE ──
 window.currentUser = null;
 const users = JSON.parse(localStorage.getItem('void_users') || '{}');
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
-  buildCards();
+  buildUGSGames();
+  buildMovieCards();
   buildProxyHints();
   renderMessages();
   bindNav();
@@ -18,81 +18,144 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreSession();
 });
 
-// ── CARD BUILDER ──
-function buildCards() {
-  renderCardGrid('moviesGrid', movies,  'media');
+// ── UGS GAMES ──
+function buildUGSGames() {
+  const grid = document.getElementById('gamesGrid');
+  if (!grid) return;
+
+  // A-Z letter filter bar
+  const letters = [...new Set(ugsFiles.map(f => {
+    const n = ugsDisplayName(f);
+    return n[0].toUpperCase();
+  }))].sort();
+
+  const filterBar = document.createElement('div');
+  filterBar.className = 'games-filter-bar';
+  filterBar.innerHTML =
+    `<span class="filter-btn active" data-letter="ALL">ALL</span>` +
+    letters.map(l => `<span class="filter-btn" data-letter="${l}">${l}</span>`).join('');
+  grid.before(filterBar);
+
+  // Search box for games
+  const gameSearch = document.createElement('input');
+  gameSearch.className = 'games-search';
+  gameSearch.placeholder = 'Search games...';
+  filterBar.after(gameSearch);
+
+  // Render all game rows
+  renderUGS(ugsFiles, grid);
+
+  // Letter filter
+  filterBar.addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const letter = btn.dataset.letter;
+    const q = gameSearch.value.toLowerCase();
+    const filtered = ugsFiles.filter(f => {
+      const name = ugsDisplayName(f);
+      const matchLetter = letter === 'ALL' || name[0].toUpperCase() === letter;
+      const matchSearch = !q || name.toLowerCase().includes(q);
+      return matchLetter && matchSearch;
+    });
+    renderUGS(filtered, grid);
+  });
+
+  // Game search box
+  gameSearch.addEventListener('input', () => {
+    const q = gameSearch.value.toLowerCase();
+    const activeLetter = filterBar.querySelector('.filter-btn.active')?.dataset.letter || 'ALL';
+    const filtered = ugsFiles.filter(f => {
+      const name = ugsDisplayName(f);
+      const matchLetter = activeLetter === 'ALL' || name[0].toUpperCase() === activeLetter;
+      return matchLetter && (!q || name.toLowerCase().includes(q));
+    });
+    renderUGS(filtered, grid);
+  });
+}
+
+function renderUGS(list, grid) {
+  if (list.length === 0) {
+    grid.innerHTML = `<div class="games-empty">No games found</div>`;
+    return;
+  }
+  grid.innerHTML = list.map(file => {
+    const name = ugsDisplayName(file);
+    const safe = name.replace(/'/g, "\\'");
+    const fileSafe = file.replace(/'/g, "\\'");
+    return `
+      <div class="game-row" onclick="launchUGS('${fileSafe}','${safe}')">
+        <span class="game-row-name">${name}</span>
+        <span class="game-row-play">▶</span>
+      </div>`;
+  }).join('');
+}
+
+function launchUGS(file, name) {
+  const normalized = file.includes('.') ? file : file + '.html';
+  const encoded = encodeURIComponent(normalized);
+  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile/UGS-Files/${encoded}?t=${Date.now()}`;
+
+  fetch(url)
+    .then(r => {
+      if (!r.ok) throw new Error('not found');
+      return r.text();
+    })
+    .then(html => {
+      const w = window.open('about:blank', '_blank');
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+    })
+    .catch(() => alert(`Could not load "${name}". The file may not exist on the CDN.`));
+}
+
+// ── MOVIE / TV CARDS ──
+function buildMovieCards() {
+  renderCardGrid('moviesGrid', movies, 'media');
   renderCardGrid('tvGrid',     tvShows, 'media');
-  renderCardGrid('gamesGrid',  games,   'game');
 }
 
 function renderCardGrid(containerId, data, type) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = data.map(item => {
-    const action = type === 'game'
-      ? `openGame('${item.url}', '${item.title.replace(/'/g, "\\'")}')`
-      : `openMedia('${item.title.replace(/'/g, "\\'")}')`;
-    const btnLabel = type === 'game' ? '▶ PLAY' : '▶ WATCH';
-    const meta     = item.year || item.desc || '';
-    const tags     = item.genre
-      ? item.genre.map(g => `<span class="tag">${g}</span>`).join('')
-      : '';
+    const action = `openMedia('${item.title.replace(/'/g,"\\'")}')`;
+    const tags = item.genre ? item.genre.map(g => `<span class="tag">${g}</span>`).join('') : '';
     return `
       <div class="card" onclick="${action}">
         <div class="card-thumb">${item.emoji}
-          <div class="card-thumb-overlay">
-            <span class="play-btn">${btnLabel}</span>
-          </div>
+          <div class="card-thumb-overlay"><span class="play-btn">▶ WATCH</span></div>
         </div>
         <div class="card-body">
           <div class="card-title">${item.title}</div>
-          <div class="card-meta">${meta}</div>
+          <div class="card-meta">${item.year || ''}</div>
           ${tags ? `<div class="card-tags">${tags}</div>` : ''}
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
-// ── MEDIA / GAME ACTIONS ──
 function openMedia(title) {
-  // TODO: connect Vidsrc or similar
-  // Example: window.open(`https://vidsrc.to/embed/movie/${tmdbId}`, '_blank');
   alert(`🎬 "${title}"\n\nConnect a streaming source (e.g. Vidsrc) to enable playback.`);
 }
 
-function openGame(url, title) {
-  const w = window.open(url, '_blank');
-  if (!w) alert(`Opening ${title}...`);
-}
-
 // ── NAVIGATION ──
-const pageTitles = {
-  home:   'Home',
-  movies: 'Movies & TV',
-  games:  'Games',
-  proxy:  'Proxy',
-  chat:   'Chat',
-};
+const pageTitles = { home:'Home', movies:'Movies & TV', games:'Games', proxy:'Proxy', chat:'Chat' };
 
 function navigate(panelId) {
   document.querySelectorAll('.nav-item').forEach(i =>
-    i.classList.toggle('active', i.dataset.panel === panelId)
-  );
+    i.classList.toggle('active', i.dataset.panel === panelId));
   document.querySelectorAll('.panel').forEach(p =>
-    p.classList.toggle('active', p.id === 'panel-' + panelId)
-  );
+    p.classList.toggle('active', p.id === 'panel-' + panelId));
   document.getElementById('pageTitle').textContent = pageTitles[panelId] || panelId;
   document.getElementById('searchInput').value = '';
 }
 
 function bindNav() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => navigate(item.dataset.panel));
-  });
-  document.querySelectorAll('.quick-card[data-goto]').forEach(card => {
-    card.addEventListener('click', () => navigate(card.dataset.goto));
-  });
+  document.querySelectorAll('.nav-item').forEach(item =>
+    item.addEventListener('click', () => navigate(item.dataset.panel)));
+  document.querySelectorAll('.quick-card[data-goto]').forEach(card =>
+    card.addEventListener('click', () => navigate(card.dataset.goto)));
 }
 
 // ── PROXY ──
@@ -100,32 +163,26 @@ function buildProxyHints() {
   const wrap = document.getElementById('proxyHints');
   if (!wrap) return;
   wrap.innerHTML = proxyHints.map(h =>
-    `<span class="proxy-hint" data-hint="${h}">${h}</span>`
-  ).join('');
-  wrap.querySelectorAll('.proxy-hint').forEach(btn => {
+    `<span class="proxy-hint" data-hint="${h}">${h}</span>`).join('');
+  wrap.querySelectorAll('.proxy-hint').forEach(btn =>
     btn.addEventListener('click', () => {
       document.getElementById('proxyInput').value = btn.dataset.hint;
-    });
-  });
+    }));
 }
 
 function bindProxy() {
-  const input   = document.getElementById('proxyInput');
-  const goBtn   = document.getElementById('proxyGoBtn');
-  const frame   = document.getElementById('proxyFrame');
-  const frameUrl= document.getElementById('proxyFrameUrl');
+  const input    = document.getElementById('proxyInput');
+  const goBtn    = document.getElementById('proxyGoBtn');
+  const frame    = document.getElementById('proxyFrame');
+  const frameUrl = document.getElementById('proxyFrameUrl');
 
   function go() {
     let val = input.value.trim();
     if (!val) return;
     if (!val.startsWith('http')) val = 'https://' + val;
-
     frameUrl.textContent = val;
-
-    // ── TO ADD YOUR PROXY ──
-    // Replace the line below with your proxy URL, e.g.:
-    //   frame.src = 'https://your-scramjet-server.onrender.com/?' + encodeURIComponent(val);
-    // For now, the iframe src is set directly (will be blocked by most sites due to X-Frame-Options).
+    // Replace with your proxy URL when ready:
+    // frame.src = 'https://your-scramjet.onrender.com/?' + encodeURIComponent(val);
     frame.src = val;
   }
 
@@ -151,9 +208,8 @@ function bindAuth() {
   document.getElementById('authModal').addEventListener('click', e => {
     if (e.target === document.getElementById('authModal')) closeAuth();
   });
-  document.querySelectorAll('.modal-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-  });
+  document.querySelectorAll('.modal-tab').forEach(tab =>
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
   document.getElementById('loginSubmit').addEventListener('click', doLogin);
   document.getElementById('registerSubmit').addEventListener('click', doRegister);
 }
@@ -164,9 +220,7 @@ function openAuth() {
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('authModal').classList.add('open');
 }
-function closeAuth() {
-  document.getElementById('authModal').classList.remove('open');
-}
+function closeAuth() { document.getElementById('authModal').classList.remove('open'); }
 function switchTab(tab) {
   document.getElementById('tab-login').classList.toggle('active', tab === 'login');
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
@@ -180,31 +234,26 @@ function doLogin() {
   const p = document.getElementById('loginPass').value;
   if (!u || !p) return alert('Fill in all fields.');
   if (!users[u] || users[u].pass !== btoa(p)) return alert('Incorrect username or password.');
-  login(u);
-  showSuccess(`Welcome back, ${u}!`, '// logged in successfully');
+  login(u); showSuccess(`Welcome back, ${u}!`, '// logged in successfully');
 }
-
 function doRegister() {
   const u = document.getElementById('regUser').value.trim();
   const e = document.getElementById('regEmail').value.trim();
   const p = document.getElementById('regPass').value;
   if (!u || !e || !p) return alert('Fill in all fields.');
-  if (p.length < 6)   return alert('Password must be at least 6 characters.');
-  if (users[u])        return alert('Username already taken.');
+  if (p.length < 6) return alert('Password must be at least 6 characters.');
+  if (users[u])     return alert('Username already taken.');
   users[u] = { email: e, pass: btoa(p) };
   localStorage.setItem('void_users', JSON.stringify(users));
-  login(u);
-  showSuccess(`Welcome, ${u}!`, '// account created');
+  login(u); showSuccess(`Welcome, ${u}!`, '// account created');
 }
-
 function login(u) {
   window.currentUser = u;
   localStorage.setItem('void_current', u);
-  document.getElementById('avatarEl').textContent   = u[0].toUpperCase();
-  document.getElementById('userNameEl').textContent  = u;
+  document.getElementById('avatarEl').textContent    = u[0].toUpperCase();
+  document.getElementById('userNameEl').textContent   = u;
   document.getElementById('userStatusEl').textContent = 'online';
 }
-
 function logout() {
   window.currentUser = null;
   localStorage.removeItem('void_current');
@@ -212,37 +261,34 @@ function logout() {
   document.getElementById('userNameEl').textContent   = 'Sign in';
   document.getElementById('userStatusEl').textContent = 'not logged in';
 }
-
 function showSuccess(text, sub) {
   document.getElementById('loginForm').style.display    = 'none';
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('authSuccess').style.display  = 'block';
-  document.getElementById('authSuccessText').textContent = text;
+  document.getElementById('authSuccessText').textContent    = text;
   document.getElementById('authSuccessSubText').textContent = sub;
   setTimeout(closeAuth, 1400);
 }
-
 function restoreSession() {
   const saved = localStorage.getItem('void_current');
   if (saved && users[saved]) login(saved);
 }
 
-// ── OPEN IN ABOUT:BLANK ──
+// ── ABOUT:BLANK ──
 function bindBlank() {
   document.getElementById('blankBtn').addEventListener('click', () => {
-    const w   = window.open('about:blank', '_blank');
-    const doc = w.document;
-    doc.open();
-    doc.write(document.documentElement.outerHTML);
-    doc.close();
+    const w = window.open('about:blank', '_blank');
+    w.document.open();
+    w.document.write(document.documentElement.outerHTML);
+    w.document.close();
   });
 }
 
-// ── SEARCH ──
+// ── SEARCH (movies/tv only — games has its own search) ──
 function bindSearch() {
   document.getElementById('searchInput').addEventListener('input', function () {
     const q = this.value.toLowerCase();
-    document.querySelectorAll('.panel.active .card').forEach(card => {
+    document.querySelectorAll('#panel-movies .card, #panel-tv .card').forEach(card => {
       const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
       card.style.display = !q || title.includes(q) ? '' : 'none';
     });
