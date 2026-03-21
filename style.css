@@ -772,7 +772,7 @@ html, body {
 }
 
 /* remove old card-grid layout for games */
-#panel-games .card-grid { display: none; }
+/* games panel uses flex list layout via #gamesGrid */
 
 /* ── CARD POSTER IMAGES ── */
 .card-thumb img {
