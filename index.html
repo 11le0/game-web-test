@@ -201,6 +201,14 @@
   </div>
 </div>
 
+<!-- GAME / MEDIA OVERLAY -->
+<div class="game-overlay" id="gameOverlay">
+  <div class="game-overlay-bar">
+    <span class="game-overlay-title" id="gameTitle"></span>
+    <button class="game-overlay-close" onclick="closeGame()">✕ Close</button>
+  </div>
+  <iframe id="gameFrame" class="game-overlay-frame" allowfullscreen sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-pointer-lock"></iframe>
+</div>
 <script src="data.js"></script>
 <script src="chat.js"></script>
 <script src="app.js"></script>
