@@ -837,3 +837,96 @@ html, body {
 
 /* games: remove filter bar styles if leftover */
 .games-filter-bar { display: none; }
+
+/* ── MOVIE CARD POSTER ── */
+.card-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.2s;
+}
+.card-thumb { position: relative; }
+
+/* ── VOID OVERLAY ── */
+#voidOverlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+  backdrop-filter: blur(6px);
+}
+#voidOverlay.open { opacity: 1; pointer-events: all; }
+
+.vo-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  width: min(1080px, 94vw);
+  height: min(680px, 92vh);
+  transform: scale(0.97); transition: transform 0.2s;
+}
+#voidOverlay.open .vo-box { transform: scale(1); }
+
+.vo-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.vo-title { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 0.04em; }
+.vo-actions { display: flex; gap: 6px; }
+.vo-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: 5px; color: var(--muted2);
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.vo-btn:hover { color: var(--text); border-color: var(--border2); }
+.vo-close { color: var(--muted); }
+.vo-close:hover { color: #ff6b6b; border-color: #ff6b6b33; }
+
+.vo-body { flex: 1; position: relative; overflow: hidden; }
+
+.vo-loading {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; background: var(--surface);
+}
+.vo-spinner {
+  width: 32px; height: 32px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--muted2);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.vo-loading-text { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+
+.vo-error {
+  position: absolute; inset: 0;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; background: var(--surface);
+}
+.vo-error-icon { font-size: 28px; }
+.vo-error-text { font-size: 13px; color: var(--muted2); text-align: center; line-height: 1.6; }
+.vo-btn-retry {
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--text); border-radius: var(--radius);
+  padding: 7px 18px; font-size: 12px; font-family: var(--mono);
+  cursor: pointer; margin-top: 4px;
+}
+.vo-btn-retry:hover { border-color: var(--muted); }
+
+.vo-frame {
+  width: 100%; height: 100%;
+  border: none; display: none;
+  background: #000;
+}
