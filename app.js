@@ -4,7 +4,7 @@ window.currentUser = null;
 const users = JSON.parse(localStorage.getItem('void_users') || '{}');
 
 // ── PROXY URL — swap this out any time ──
-const PROXY_BASE = 'https://8021688600113732413547102395624276084104729385610293875616.estoniaeducation.info/';
+const PROXY_BASE = 'https://scramjet.mercurywork.shop/';
 
 document.addEventListener('DOMContentLoaded', () => {
   buildMovieCards();
