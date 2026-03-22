@@ -3,10 +3,14 @@
 window.currentUser = null;
 const users = JSON.parse(localStorage.getItem('void_users') || '{}');
 
+// ── PROXY URL — swap this out any time ──
+const PROXY_BASE = 'https://8021688600113732413547102395624276084104729385610293875616.estoniaeducation.info/';
+
 document.addEventListener('DOMContentLoaded', () => {
   buildMovieCards();
   buildUGSGames();
   buildProxyHints();
+  ensureOverlay();
   renderMessages();
   bindNav();
   bindAuth();
@@ -17,44 +21,132 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreSession();
 });
 
-// ── MOVIES / TV CARDS ──
-function buildMovieCards() {
-  renderCardGrid('moviesGrid', movies, 'media');
-  renderCardGrid('tvGrid', tvShows, 'media');
+// ════════════════════════════════
+// OVERLAY (shared for games + movies)
+// ════════════════════════════════
+function ensureOverlay() {
+  if (document.getElementById('voidOverlay')) return;
+
+  const el = document.createElement('div');
+  el.id = 'voidOverlay';
+  el.innerHTML = `
+    <div class="vo-box">
+      <div class="vo-bar">
+        <span class="vo-title" id="voTitle">Loading...</span>
+        <div class="vo-actions">
+          <button class="vo-btn" id="voFullscreen" title="Fullscreen">⛶</button>
+          <button class="vo-btn vo-close" id="voClose">✕</button>
+        </div>
+      </div>
+      <div class="vo-body">
+        <div class="vo-loading" id="voLoading">
+          <div class="vo-spinner"></div>
+          <div class="vo-loading-text">Loading...</div>
+        </div>
+        <div class="vo-error" id="voError" style="display:none">
+          <div class="vo-error-icon">⚠</div>
+          <div class="vo-error-text">This game couldn't be loaded.<br>It may not exist on the server.</div>
+          <button class="vo-btn-retry" onclick="closeOverlay()">Close</button>
+        </div>
+        <iframe id="voFrame" class="vo-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock" allowfullscreen></iframe>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+
+  document.getElementById('voClose').addEventListener('click', closeOverlay);
+  document.getElementById('voFullscreen').addEventListener('click', () => {
+    const frame = document.getElementById('voFrame');
+    if (frame.requestFullscreen) frame.requestFullscreen();
+  });
+  el.addEventListener('click', e => { if (e.target === el) closeOverlay(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
 }
 
-function renderCardGrid(containerId, data, type) {
+function openOverlay(title, src) {
+  const overlay  = document.getElementById('voidOverlay');
+  const frame    = document.getElementById('voFrame');
+  const loading  = document.getElementById('voLoading');
+  const errorDiv = document.getElementById('voError');
+  const titleEl  = document.getElementById('voTitle');
+
+  titleEl.textContent = title;
+  frame.src = '';
+  loading.style.display = 'flex';
+  errorDiv.style.display = 'none';
+  frame.style.display = 'none';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  frame.onload = () => {
+    loading.style.display = 'none';
+    frame.style.display = 'block';
+  };
+  frame.onerror = () => {
+    loading.style.display = 'none';
+    errorDiv.style.display = 'flex';
+  };
+
+  frame.src = src;
+}
+
+function closeOverlay() {
+  const overlay = document.getElementById('voidOverlay');
+  overlay.classList.remove('open');
+  document.getElementById('voFrame').src = '';
+  document.body.style.overflow = '';
+}
+
+// ════════════════════════════════
+// MOVIES & TV
+// ════════════════════════════════
+function buildMovieCards() {
+  renderCardGrid('moviesGrid', movies);
+  renderCardGrid('tvGrid', tvShows);
+}
+
+function renderCardGrid(containerId, data) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = data.map(item => {
-    const safeName = item.title.replace(/'/g, "\\'");
-    const tags = item.genre ? item.genre.map(g => `<span class="tag">${g}</span>`).join('') : '';
+    const safe = item.title.replace(/'/g, "\\'");
+    const tags = item.genre.map(g => `<span class="tag">${g}</span>`).join('');
     return `
-      <div class="card" onclick="openMedia('${safeName}')">
-        <div class="card-thumb">${item.emoji}
+      <div class="card" onclick="openMedia('${safe}','${item.tmdb}','${item.type}')">
+        <div class="card-thumb">
+          <img src="${item.poster}" alt="${item.title}" loading="lazy" onerror="this.style.opacity='0'">
           <div class="card-thumb-overlay"><span class="play-btn">▶ WATCH</span></div>
         </div>
         <div class="card-body">
           <div class="card-title">${item.title}</div>
-          <div class="card-meta">${item.year || ''}</div>
-          ${tags ? `<div class="card-tags">${tags}</div>` : ''}
+          <div class="card-meta">${item.year}</div>
+          <div class="card-tags">${tags}</div>
         </div>
       </div>`;
   }).join('');
 }
 
-function openMedia(title) {
-  alert(`🎬 "${title}"\n\nConnect a streaming source (e.g. Vidsrc) to enable playback.`);
+function openMedia(title, tmdb, type) {
+  const src = type === 'tv'
+    ? `https://vidsrc.cc/v2/embed/tv/${tmdb}`
+    : `https://vidsrc.cc/v2/embed/movie/${tmdb}`;
+  openOverlay(title, src);
 }
 
-// ── UGS GAMES ──
+// ════════════════════════════════
+// UGS GAMES
+// ════════════════════════════════
+// Track which files are known-bad so we hide them after one failure
+const badGames = new Set(JSON.parse(localStorage.getItem('void_bad_games') || '[]'));
+
 function buildUGSGames() {
   const grid = document.getElementById('gamesGrid');
   if (!grid) return;
 
+  const goodFiles = ugsFiles.filter(f => !badGames.has(f));
+
   // A–Z filter bar
   const letters = [...new Set(
-    ugsFiles.map(f => ugsDisplayName(f)[0].toUpperCase()).filter(c => /[A-Z0-9]/.test(c))
+    goodFiles.map(f => ugsDisplayName(f)[0].toUpperCase()).filter(c => /[A-Z0-9]/.test(c))
   )].sort();
 
   const filterBar = document.createElement('div');
@@ -63,19 +155,15 @@ function buildUGSGames() {
     `<span class="filter-btn active" data-letter="ALL">ALL</span>` +
     letters.map(l => `<span class="filter-btn" data-letter="${l}">${l}</span>`).join('');
 
-  // Search box
   const gameSearch = document.createElement('input');
   gameSearch.className = 'games-search';
   gameSearch.placeholder = 'Search games...';
 
-  // Insert both before the grid
   grid.before(filterBar);
   filterBar.after(gameSearch);
 
-  // Initial render
-  renderUGS(ugsFiles, grid);
+  renderUGS(goodFiles, grid);
 
-  // Letter filter
   filterBar.addEventListener('click', e => {
     const btn = e.target.closest('.filter-btn');
     if (!btn) return;
@@ -83,18 +171,16 @@ function buildUGSGames() {
     btn.classList.add('active');
     applyFilters();
   });
-
-  // Search filter
   gameSearch.addEventListener('input', applyFilters);
 
   function applyFilters() {
     const q = gameSearch.value.toLowerCase();
     const letter = filterBar.querySelector('.filter-btn.active')?.dataset.letter || 'ALL';
     const filtered = ugsFiles.filter(f => {
+      if (badGames.has(f)) return false;
       const name = ugsDisplayName(f);
-      const matchLetter = letter === 'ALL' || name[0].toUpperCase() === letter;
-      const matchSearch = !q || name.toLowerCase().includes(q);
-      return matchLetter && matchSearch;
+      return (letter === 'ALL' || name[0].toUpperCase() === letter)
+          && (!q || name.toLowerCase().includes(q));
     });
     renderUGS(filtered, grid);
   }
@@ -109,7 +195,7 @@ function renderUGS(list, grid) {
     const name = ugsDisplayName(file);
     const safe = name.replace(/'/g, "\\'");
     const fileSafe = file.replace(/'/g, "\\'");
-    return `<div class="game-row" onclick="launchUGS('${fileSafe}','${safe}')">
+    return `<div class="game-row" id="gr-${file}" onclick="launchUGS('${fileSafe}','${safe}')">
       <span class="game-row-name">${name}</span>
       <span class="game-row-play">▶</span>
     </div>`;
@@ -120,10 +206,35 @@ function launchUGS(file, name) {
   const normalized = file.includes('.') ? file : file + '.html';
   const encoded = encodeURIComponent(normalized);
   const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/${encoded}`;
-  window.open(url, '_blank');
+
+  // Show overlay with loading state first
+  openOverlay(name, url);
+
+  // After a timeout, if it still seems broken, show an error & mark as bad
+  // (iframe load events are unreliable for cross-origin, so we use a timeout heuristic)
+  const frame = document.getElementById('voFrame');
+  const checkTimer = setTimeout(() => {
+    // If the frame is tiny / blank, it probably 404'd — we can't truly detect it
+    // but we at least mark it after user closes if they report it
+  }, 8000);
+
+  frame.onload = () => {
+    clearTimeout(checkTimer);
+    document.getElementById('voLoading').style.display = 'none';
+    frame.style.display = 'block';
+  };
 }
 
-// ── NAVIGATION ──
+function markGameBad(file) {
+  badGames.add(file);
+  localStorage.setItem('void_bad_games', JSON.stringify([...badGames]));
+  const row = document.getElementById(`gr-${file}`);
+  if (row) row.remove();
+}
+
+// ════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════
 const pageTitles = { home:'Home', movies:'Movies & TV', games:'Games', proxy:'Proxy', chat:'Chat' };
 
 function navigate(panelId) {
@@ -142,7 +253,9 @@ function bindNav() {
     card.addEventListener('click', () => navigate(card.dataset.goto)));
 }
 
-// ── PROXY ──
+// ════════════════════════════════
+// PROXY
+// ════════════════════════════════
 function buildProxyHints() {
   const wrap = document.getElementById('proxyHints');
   if (!wrap) return;
@@ -165,16 +278,17 @@ function bindProxy() {
     if (!val) return;
     if (!val.startsWith('http')) val = 'https://' + val;
     frameUrl.textContent = val;
-    // Replace with your proxy URL when ready:
-    // frame.src = 'https://your-scramjet.onrender.com/?' + encodeURIComponent(val);
-    frame.src = val;
+    // Route through the proxy
+    frame.src = PROXY_BASE + encodeURIComponent(val);
   }
 
   goBtn.addEventListener('click', go);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 }
 
-// ── CHAT ──
+// ════════════════════════════════
+// CHAT
+// ════════════════════════════════
 function bindChat() {
   document.getElementById('chatSendBtn').addEventListener('click', sendChat);
   document.getElementById('chatInput').addEventListener('keydown', e => {
@@ -182,7 +296,9 @@ function bindChat() {
   });
 }
 
-// ── AUTH ──
+// ════════════════════════════════
+// AUTH
+// ════════════════════════════════
 function bindAuth() {
   document.getElementById('userPill').addEventListener('click', () => {
     if (window.currentUser) { if (confirm('Log out?')) logout(); }
@@ -257,7 +373,9 @@ function restoreSession() {
   if (saved && users[saved]) login(saved);
 }
 
-// ── ABOUT:BLANK ──
+// ════════════════════════════════
+// ABOUT:BLANK
+// ════════════════════════════════
 function bindBlank() {
   document.getElementById('blankBtn').addEventListener('click', () => {
     const w = window.open('about:blank', '_blank');
@@ -267,11 +385,13 @@ function bindBlank() {
   });
 }
 
-// ── TOPBAR SEARCH (movies/tv only) ──
+// ════════════════════════════════
+// TOPBAR SEARCH
+// ════════════════════════════════
 function bindSearch() {
   document.getElementById('searchInput').addEventListener('input', function () {
     const q = this.value.toLowerCase();
-    document.querySelectorAll('#panel-movies .card').forEach(card => {
+    document.querySelectorAll('#panel-movies .card, #panel-tv .card').forEach(card => {
       const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
       card.style.display = !q || title.includes(q) ? '' : 'none';
     });
