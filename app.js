@@ -119,7 +119,7 @@ function renderUGS(list, grid) {
 function launchUGS(file, name) {
   const normalized = file.includes('.') ? file : file + '.html';
   const encoded = encodeURIComponent(normalized);
-  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/UGS-Files/${encoded}`;
+  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/${encoded}`;
   window.open(url, '_blank');
 }
 
